@@ -21,6 +21,7 @@ import (
 	"net/netip"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -380,6 +381,50 @@ func TestSSHAgentForwarding(t *testing.T) {
 	o, err := s.CombinedOutput(fmt.Sprintf(`ssh -T -o StrictHostKeyChecking=no -p %s upstreamuser@%s "true"`, upstreamPort, upstreamHost))
 	if err != nil {
 		t.Fatalf("unable to call true command: %s\n%s\n-------------------------", err, o)
+	}
+}
+
+func TestX11ForwardingRequest(t *testing.T) {
+	const testX11AuthCookie = "deadbeef"
+
+	u, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tailscaleAddr := testServer(t, u.Username, false, false)
+	cl, err := ssh.Dial("tcp", tailscaleAddr, &ssh.ClientConfig{
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cl.Close() })
+
+	ch, reqs, err := cl.OpenChannel("session", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ch.Close() })
+	go ssh.DiscardRequests(reqs)
+
+	payload := ssh.Marshal(struct {
+		SingleConnection bool
+		AuthProtocol     string
+		AuthCookie       string
+		Screen           uint32
+	}{
+		SingleConnection: false,
+		AuthProtocol:     "MIT-MAGIC-COOKIE-1",
+		AuthCookie:       testX11AuthCookie,
+		Screen:           0,
+	})
+	ok, err := ch.SendRequest("x11-req", true, payload)
+	if err != nil {
+		t.Fatalf("x11-req request failed: %v", err)
+	}
+	if !ok {
+		t.Fatal("x11-req request was rejected")
 	}
 }
 

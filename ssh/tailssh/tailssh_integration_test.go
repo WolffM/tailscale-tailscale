@@ -385,6 +385,8 @@ func TestSSHAgentForwarding(t *testing.T) {
 }
 
 func TestX11ForwardingRequest(t *testing.T) {
+	const testX11AuthCookie = "deadbeef"
+
 	u, err := user.Current()
 	if err != nil {
 		t.Fatal(err)
@@ -414,7 +416,7 @@ func TestX11ForwardingRequest(t *testing.T) {
 	}{
 		SingleConnection: false,
 		AuthProtocol:     "MIT-MAGIC-COOKIE-1",
-		AuthCookie:       "deadbeef",
+		AuthCookie:       testX11AuthCookie,
 		Screen:           0,
 	})
 	ok, err := ch.SendRequest("x11-req", true, payload)
